@@ -1,0 +1,148 @@
+---
+title: "A descriptive analysis on weather events in the United States that have negative consequences on population health and the economy"
+output: 
+  html_document: 
+    keep_md: yes
+---
+## Synopsis
+
+In this report, we aim to analyze the impact of different weather events on public health and economy based on the storm database collected from the U.S. National Oceanic and Atmospheric Administration's (NOAA) from 1950 - 2011. We will use the estimates of fatalities, injuries, property and crop damage to decide which types of event are most harmful to the population health and economy. From these data, we found that excessive heat and tornado are most harmful with respect to population health, while flood, drought, and hurricane/typhoon have the greatest economic consequences.
+
+## Data Processing
+
+This script assumes that you have downloaded the data and set the working directory in Rstudio where data is present, if not then set the working directory with setwd() command.
+
+```{r,echo=TRUE,cache=TRUE}
+storm_data <- read.csv('repdata_data_StormData.csv.bz2')
+dim(storm_data)
+str(storm_data)
+```
+
+As shown by the 'dim' command, there are 902297 rows and 37 columns in total. As mentioned, the events in the database start in the year 1950 and end in November 2011. In the earlier years of the database there are generally fewer events recorded, most likely due to a lack of good records. More recent years should be considered more complete.We will have a look at this and try to extract the data from years which significantly form the most part of the data.
+
+```{r,echo=TRUE,cache=TRUE}
+storm_data$Year <- as.numeric(format(as.Date(storm_data$BGN_DATE, format="%m/%d/%Y"),"%Y"))
+hist(storm_data$Year, breaks = 30, xlab = "Year", main  = 'Frequency of data by Year')
+```
+
+Thus shown by the histogram, we can see that there is significant rise of frequency from year 1995. Therefore, we will use the data starting from year 1995.
+
+```{r,echo=TRUE,cache=TRUE}
+data <- storm_data[storm_data$Year >= 1995, ]
+dim(data)
+```
+
+### Question 1 . Across the United States, which types of events are most harmful with respect to population health?
+
+There are 2 columns in the dataset which show the harm caused to the population, 'INJURIES' and 'FATALITIES'.Below are the table of the events(seperate for Injuries and Fatalities) which have caused the most harm.
+
+```{r,echo=TRUE,cache=TRUE}
+library(dplyr)
+data$Total_harm <- data$INJURIES + data$FATALITIES
+total_harm <- data %>% group_by(EVTYPE) %>% summarize(Injuries_and_Fatalities = sum(Total_harm))
+total_harm <- total_harm[order(total_harm$Injuries_and_Fatalities, decreasing = TRUE), ]
+total_harm <- total_harm[total_harm$Injuries_and_Fatalities > 0 , ]
+harmful_events_injuries <- data %>% group_by(EVTYPE) %>% summarize(Injuries = sum(INJURIES))
+harmful_events_fatalities <- data %>% group_by(EVTYPE) %>% summarize(Fatalities = sum(FATALITIES))
+harmful_events_injuries <- harmful_events_injuries[order(harmful_events_injuries$Injuries, decreasing = TRUE), ]
+harmful_events_fatalities <- harmful_events_fatalities[order(harmful_events_fatalities$Fatalities, decreasing = TRUE), ]
+harmful_events_injuries <- harmful_events_injuries[harmful_events_injuries$Injuries > 0, ]
+harmful_events_fatalities <- harmful_events_fatalities[harmful_events_fatalities$Fatalities > 0, ]
+
+
+head(total_harm, 20)
+head(harmful_events_injuries, 20)
+head(harmful_events_fatalities, 20)
+```
+
+### Question 2. Across the United States, which types of events have the greatest economic consequences?
+
+There are 4 columns in the dataset which tells about the economic consequences: 
+1. PROPDMG - Filled with a number which should be multiplied by the number signified by the character in the PROPDMGEXP column 
+2. PROPDMGEXP - Filled with either one of the four entries where "H" for hundreds, “K” for thousands, “M” for millions, and “B” for billions
+3. CROPDMG - Filled with a number which should be multiplied by the number signified by the character in the cROPDMGEXP column
+4. CROPDMGEXP -  Filled with either one of the four entries where "H"for hundreds, “K” for thousands, “M” for millions, and “B” for billions
+
+Using the information given above, 2 different datasets are created for Property damage and Crop damage. 
+At last, 20 top values of Event type with the damage associated with them are shown.
+
+```{r,echo=TRUE,cache=TRUE}
+data$PROPDMGEXP <- toupper(data$PROPDMGEXP)
+data$CROPDMGEXP <- toupper(data$CROPDMGEXP)
+
+new_data <- data %>% filter(PROPDMGEXP == 'H'| PROPDMGEXP == 'K' | PROPDMGEXP == 'M' | PROPDMGEXP == 'B') %>% select(EVTYPE,PROPDMG, PROPDMGEXP)
+new_data <- new_data %>% mutate(Prop_damage = ifelse(PROPDMGEXP == 'H', PROPDMG * 100,ifelse(PROPDMGEXP == 'K', PROPDMG * 1000,ifelse(PROPDMGEXP == 'M', PROPDMG * 1000000,ifelse(PROPDMGEXP == 'B', PROPDMG * 1000000000,0)))))
+
+new_data_1 <- data %>% filter(CROPDMGEXP == 'H'| CROPDMGEXP == 'K' | CROPDMGEXP == 'M' | CROPDMGEXP == 'B') %>% select(EVTYPE,CROPDMG, CROPDMGEXP)
+new_data_1 <- new_data_1 %>% mutate(Crop_damage = ifelse(CROPDMGEXP == 'H', CROPDMG * 100,ifelse(CROPDMGEXP == 'K', CROPDMG * 1000,ifelse(CROPDMGEXP == 'M', CROPDMG * 1000000,ifelse(CROPDMGEXP == 'B', CROPDMG * 1000000000,0)))))
+
+new_data <- new_data %>% group_by(EVTYPE) %>% summarize(Prop_damage = sum(Prop_damage))
+new_data_1 <- new_data_1 %>% group_by(EVTYPE) %>% summarize(Crop_damage = sum(Crop_damage))
+
+new_data <- new_data[order(new_data$Prop_damage, decreasing = T), c('EVTYPE', "Prop_damage")]
+new_data_1 <- new_data_1[order(new_data_1$Crop_damage, decreasing = T), c('EVTYPE', 'Crop_damage')]
+
+head(new_data, 20)
+head(new_data_1,20)
+```
+
+
+## Results
+
+Below are the results obtained from the above analysis:
+
+```{r,echo=FALSE}
+total_harm <- total_harm[1:20, ]
+harmful_events_fatalities <- harmful_events_fatalities[1:20, ]
+harmful_events_injuries <- harmful_events_injuries[1:20, ]
+new_data <- new_data[1:10, ]
+new_data_1 <- new_data_1[1:10, ]
+```
+
+Total number of Injuries and Fatalities caused by Weather - 
+
+```{r,echo=FALSE}
+total_harm
+```
+
+Events which caused the highest number of Injuries - 
+
+```{r,echo=FALSE}
+harmful_events_injuries
+```
+Events which caused the highest number of Fatalities - 
+
+```{r,echo=FALSE}
+harmful_events_fatalities
+```
+
+And the following is the graph for Total(Fatalities and Injuries) caused by the weather:
+
+```{r,echo=TRUE}
+library(ggplot2)
+ggplot(data=total_harm, aes(x=EVTYPE, y = Injuries_and_Fatalities)) + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 45, hjust=1)) + labs(x = 'Event Type', y = 'Total number of Fatalities and Injuries', title = 'Total Fatalities and Injuries by Weather in the U.S.\n from 1995 - 2011')
+```
+
+
+Property Damage caused by weather - 
+```{r,echo=FALSE}
+new_data
+```
+
+Crop Damage  caused by weather- 
+```{r,echo=FALSE}
+new_data_1
+```
+
+```{r,echo=TRUE}
+a <- ggplot(data=new_data, aes(x=EVTYPE, y = Prop_damage)) + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 45, hjust=1)) + labs(x = 'Event Type', y = 'Cost of Property Damage in Dollars', title  = 'Property Damage by Weather\n in the U.S.\n from 1995 - 2011') 
+b <- ggplot(data=new_data_1, aes(x=EVTYPE, y = Crop_damage)) + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 45, hjust=1)) + labs(x = 'Event Type', y = 'Cost of Crop Damage in Dollars', title = 'Crop Damage by Weather\n in the U.S.\n from 1995 - 2011')
+library(gridExtra)
+a <- ggplotGrob(a)
+b <- ggplotGrob(b)
+grid.arrange(a,b, ncol = 2)
+```
+
+
+
+
